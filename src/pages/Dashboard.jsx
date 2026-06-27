@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../services/supabase";
-import stock from "./stock";
+import Stock from "./stock";
 
 const CATEGORIES  = ["Ingredientes","Packaging","Servicios","Personal","Otros"];
 const METODOS     = ["Efectivo","Mercado Pago","Débito","Crédito"];
@@ -18,18 +18,19 @@ function formatDate(iso) {
 }
 
 export default function Dashboard() {
-  const [user, setUser]         = useState(null);
-  const [perfil, setPerfil]     = useState(null);
-  const [tab, setTab]           = useState("resumen");
-  const [ingresos, setIngresos] = useState([]);
-  const [gastos, setGastos]     = useState([]);
-  const [ventas, setVentas]     = useState([]);
-  const [usuarios, setUsuarios] = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [toast, setToast]       = useState(null);
-  const [modalType, setModalType]       = useState(null);
-  const [form, setForm]                 = useState({ descripcion: "", monto: "", categoria: CATEGORIES[0], fecha: new Date().toISOString().slice(0,10), notas: "" });
-  const [formLoading, setFormLoading]   = useState(false);
+  const [user, setUser]           = useState(null);
+  const [perfil, setPerfil]       = useState(null);
+  const [tab, setTab]             = useState("resumen");
+  const [menuOpen, setMenuOpen]   = useState(false);
+  const [ingresos, setIngresos]   = useState([]);
+  const [gastos, setGastos]       = useState([]);
+  const [ventas, setVentas]       = useState([]);
+  const [usuarios, setUsuarios]   = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [toast, setToast]         = useState(null);
+  const [modalType, setModalType]         = useState(null);
+  const [form, setForm]                   = useState({ descripcion: "", monto: "", categoria: CATEGORIES[0], fecha: new Date().toISOString().slice(0,10), notas: "" });
+  const [formLoading, setFormLoading]     = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear,  setSelectedYear]  = useState(new Date().getFullYear());
@@ -50,9 +51,9 @@ export default function Dashboard() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     const [{ data: ing }, { data: gas }, { data: ven }, { data: usrs }] = await Promise.all([
-      supabase.from("ingresos").select("*").order("fecha",     { ascending: false }),
-      supabase.from("gastos").select("*").order("fecha",       { ascending: false }),
-      supabase.from("ventas").select("*").order("created_at",  { ascending: false }),
+      supabase.from("ingresos").select("*").order("fecha",    { ascending: false }),
+      supabase.from("gastos").select("*").order("fecha",      { ascending: false }),
+      supabase.from("ventas").select("*").order("created_at", { ascending: false }),
       supabase.from("usuarios").select("id, nombre, apellido, rol"),
     ]);
     setIngresos(ing  ?? []);
@@ -173,16 +174,15 @@ export default function Dashboard() {
     const anio = selectedYear;
     const wb   = XLSX.utils.book_new();
 
-    // Hoja 1: Resumen
     const resumenData = [
       ["MANJARES — Resumen financiero", "", ""],
       [`Período: ${mes} ${anio}`, "", ""],
       ["", "", ""],
       ["Concepto", "Monto (ARS)", ""],
-      ["Ventas del mes",  totalVentas,  ""],
+      ["Ventas del mes",  totalVentas,   ""],
       ["Otros ingresos",  totalIngresos, ""],
-      ["Gastos del mes",  totalGastos,  ""],
-      ["Balance neto",    balance,      ""],
+      ["Gastos del mes",  totalGastos,   ""],
+      ["Balance neto",    balance,       ""],
       ["", "", ""],
       ["Margen (%)", margen !== "—" ? `${margen}%` : "—", ""],
     ];
@@ -190,31 +190,24 @@ export default function Dashboard() {
     wsResumen["!cols"] = [{ wch: 28 }, { wch: 18 }, { wch: 10 }];
     XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
 
-    // Hoja 2: Ventas
     const ventasHeaders = ["Fecha","Cliente","Descripción","Método de pago","Registrado por","Total (ARS)"];
-    const ventasRows = ventasF.map(v => [
-      formatDate(v.created_at), v.cliente, v.descripcion,
-      v.metodo_pago, getNombreUsuario(v.usuario_id), v.total,
-    ]);
+    const ventasRows = ventasF.map(v => [formatDate(v.created_at), v.cliente, v.descripcion, v.metodo_pago, getNombreUsuario(v.usuario_id), v.total]);
     const wsVentas = XLSX.utils.aoa_to_sheet([ventasHeaders, ...ventasRows]);
     wsVentas["!cols"] = [{ wch: 14 },{ wch: 20 },{ wch: 30 },{ wch: 16 },{ wch: 22 },{ wch: 14 }];
     XLSX.utils.book_append_sheet(wb, wsVentas, "Ventas");
 
-    // Hoja 3: Ingresos
     const ingHeaders = ["Fecha","Descripción","Notas","Monto (ARS)"];
     const ingRows = ingresosF.map(r => [formatDate(r.fecha), r.descripcion, r.notas ?? "", r.monto]);
     const wsIng = XLSX.utils.aoa_to_sheet([ingHeaders, ...ingRows]);
     wsIng["!cols"] = [{ wch: 14 },{ wch: 30 },{ wch: 28 },{ wch: 14 }];
     XLSX.utils.book_append_sheet(wb, wsIng, "Ingresos");
 
-    // Hoja 4: Gastos
     const gasHeaders = ["Fecha","Descripción","Categoría","Notas","Monto (ARS)"];
     const gasRows = gastosF.map(r => [formatDate(r.fecha), r.descripcion, r.categoria ?? "", r.notas ?? "", r.monto]);
     const wsGas = XLSX.utils.aoa_to_sheet([gasHeaders, ...gasRows]);
     wsGas["!cols"] = [{ wch: 14 },{ wch: 30 },{ wch: 16 },{ wch: 28 },{ wch: 14 }];
     XLSX.utils.book_append_sheet(wb, wsGas, "Gastos");
 
-    // Hoja 5: Métodos de pago
     const metHeaders = ["Método de pago","Cantidad de ventas","Total (ARS)"];
     const metRows = METODOS.map(m => {
       const vs = ventasF.filter(v => v.metodo_pago === m);
@@ -229,7 +222,10 @@ export default function Dashboard() {
 
   // ── Render ─────────────────────────────────────────────────────
   return (
-    <div className="dash-root">
+    <div className={`dash-root${menuOpen ? " sidebar-open" : ""}`}>
+
+      {/* Overlay mobile */}
+      <div className="sidebar-overlay" onClick={() => setMenuOpen(false)} />
 
       {/* Sidebar */}
       <aside className="dash-sidebar">
@@ -248,7 +244,7 @@ export default function Dashboard() {
             <button
               key={item.key}
               className={`sidebar-link${tab === item.key ? " active" : ""}`}
-              onClick={() => setTab(item.key)}
+              onClick={() => { setTab(item.key); setMenuOpen(false); }}
             >
               <span className="nav-icon">{item.icon}</span>
               <span>{item.label}</span>
@@ -272,7 +268,10 @@ export default function Dashboard() {
 
         {/* Topbar */}
         <header className="dash-topbar">
-          <div className="topbar-left">
+          <div className="topbar-left" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <button className="btn-hamburger" onClick={() => setMenuOpen(o => !o)}>
+              <span /><span /><span />
+            </button>
             <h1 className="topbar-title">
               {tab === "resumen"  && "Resumen financiero"}
               {tab === "ventas"   && "Ventas"}
@@ -305,7 +304,6 @@ export default function Dashboard() {
             <div className="loading-state"><div className="spinner" /><span>Cargando datos...</span></div>
           ) : (
             <>
-
               {/* ── RESUMEN ── */}
               {tab === "resumen" && (
                 <div className="tab-resumen">
@@ -436,11 +434,7 @@ export default function Dashboard() {
                   <div className="table-card">
                     <table className="data-table">
                       <thead>
-                        <tr>
-                          <th>Fecha</th><th>Cliente</th><th>Descripción</th>
-                          <th>Método</th><th>Registrado por</th>
-                          <th className="col-right">Total</th><th />
-                        </tr>
+                        <tr><th>Fecha</th><th>Cliente</th><th>Descripción</th><th>Método</th><th>Registrado por</th><th className="col-right">Total</th><th /></tr>
                       </thead>
                       <tbody>
                         {ventasF.length === 0 ? (
@@ -535,7 +529,6 @@ export default function Dashboard() {
 
               {/* ── STOCK ── */}
               {tab === "stock" && <Stock user={user} />}
-
             </>
           )}
         </div>
