@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../services/supabase";
-import Stock from "./Stock";
+import stock from "./stock";
 
 const CATEGORIES  = ["Ingredientes","Packaging","Servicios","Personal","Otros"];
 const METODOS     = ["Efectivo","Mercado Pago","Débito","Crédito"];
